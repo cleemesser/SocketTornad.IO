@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 try:
     from setuptools import setup, find_packages
 except ImportError:
@@ -6,18 +5,23 @@ except ImportError:
     use_setuptools()
     from setuptools import setup, find_packages
 
-setup(name = 'socket-tornad.io',
-    version = '0.1',
-    description = 'Implementation of the socket.io protocol for Tornado.',
-    author = 'Brendan W. McAdams',
-    author_email = 'bmcadams@novus.com',
-    url = 'http://novus.com',
+
+setup(
+    name='SocketTornad.IO',
+    version='0.1.0',
+    author='Brendan W. McAdams',
+    author_email='bmcadams@novus.com',
+    packages=['tornad_io'],
+    scripts=[],
+    url='http://pypi.python.org/pypi/SocketTornad.IO/',
+    license='LICENSE',
+    description='Python implementation of the Socket.IO protocol for the Tornado webserver/framework.',
+    long_description=open('README').read(),
     install_requires=[
-      "pyCLI>=1.1.1",
-      "simplejson",
-      "unidecode",
-      "tornado>=1.1.0",
-      "twisted",
-    ],
-    #scripts = ['path/to/script']
+        'pyCLI >= 1.1.1',
+        'simplejson >= 2.1.0', # Decimal support
+        'tornado >= 1.1.0',
+        'twisted', # for the flash service, at least for now.
+        'beaker >= 1.5.3'
+    ]
 )
