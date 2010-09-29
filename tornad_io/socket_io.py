@@ -98,15 +98,15 @@ class SocketIOProtocol(tornado.web.RequestHandler):
 
     def _heartbeat(self):
         # TODO - Check we *RECEIVE* heartbeats
-        if self.stream.socket == None:
-            logging.debug("[%s] closed stream? %s Connected? %s" % (self.session.id, self.stream.closed(), self.connected))
-            logging.info("Connection no longer active.  Shutting down heartbeat scheduler.")
-            self._timeout.stop()
-            self._abort()
-        else:
+        try:
             self._heartbeats += 1
             logging.debug("[%s] Sending Heartbeat %d" % (self.session.id, self._heartbeats))
             self.send('~h~%d' % self._heartbeats)
+        except Exception as e:
+            #logging.debug("[%s] closed stream? %s Connected? %s" % (self.session.id, self.stream.closed(), self.connected))
+            logging.info("Connection no longer active.  Shutting down heartbeat scheduler.")
+            self._timeout.stop()
+            self._abort()
 
     def on_heartbeat(self, beat):
         if beat == self._heartbeats:
@@ -118,6 +118,9 @@ class SocketIOProtocol(tornado.web.RequestHandler):
     def reset_timeout(self):
         pass
 
+    def verify_origin(self, header):
+        logging.warning("Verify Origin [Not implemented]: %s" % header)
+        pass
 
     def send(self, message):
         """Message to send data to the client.
@@ -216,7 +219,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
 
     def _abort(self):
         self.connected = False
-        self.stream.close()
+        #self.stream.close()
 
     def on_open(self, *args, **kwargs):
         """Invoked when a protocol socket is opened...

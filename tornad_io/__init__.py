@@ -10,18 +10,19 @@ import tornado.web
 import tornado.httpserver
 
 import tornad_io.websocket
-import tornad_io.flashsocket
+import tornad_io.websocket.flash
+import tornad_io.polling
 import tornad_io.socket_io
 
 logging.getLogger().setLevel(logging.DEBUG)
 # TODO - Monkey Patchable package object?
 PROTOCOLS = {
-    "xhr-polling": None,
-    "xhr-multipart": None,
-    "jsonp-polling": None,
-    "htmlfile": None,
-    "websocket": type('WebSocketIOHandler', (tornad_io.websocket.WebSocketIOHandler,), {}),
-    "flashsocket": type('FlashSocketIOHandler', (tornad_io.websocket.WebSocketIOHandler,), {}), # TODO - Bind flash policy server
+    "xhr-polling": tornad_io.polling.XHRPollingSocketIOHandler,
+    "xhr-multipart": tornad_io.polling.XHRMultiPartSocketIOHandler,
+    "jsonp-polling": tornad_io.polling.JSONPPollingSocketIOHandler,
+    "htmlfile": tornad_io.polling.HTMLFileSocketIOHandler,
+    "websocket": tornad_io.websocket.WebSocketIOHandler,
+    "flashsocket": tornad_io.websocket.flash.FlashSocketIOHandler,
 }
 
 class SocketIOHandler(tornado.web.RequestHandler):
@@ -118,7 +119,7 @@ application = tornado.web.Application([
 ])
 
 if __name__ == "__main__":
-    flash_policy = tornad_io.flashsocket.FlashPolicyServer()
+    #flash_policy = tornad_io.websocket.flash.FlashPolicyServer()
     http_server = tornado.httpserver.HTTPServer(application)
     http_server.listen(8888)
     tornado.ioloop.IOLoop.instance().start()

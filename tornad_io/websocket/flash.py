@@ -55,4 +55,4 @@ class FlashPolicyServer(object):
 
 
 if __name__ == "__main__":
-    flash_policy = tornad_io.flashsocket.FlashPolicyServer()
+    flash_policy = tornad_io.websocket.flash.FlashPolicyServer()
