@@ -10,6 +10,7 @@ import tornado.web
 import tornado.httpserver
 
 import tornad_io.websocket
+import tornad_io.flashsocket
 import tornad_io.socket_io
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -117,6 +118,7 @@ application = tornado.web.Application([
 ])
 
 if __name__ == "__main__":
+    flash_policy = tornad_io.flashsocket.FlashPolicyServer()
     http_server = tornado.httpserver.HTTPServer(application)
     http_server.listen(8888)
     tornado.ioloop.IOLoop.instance().start()
