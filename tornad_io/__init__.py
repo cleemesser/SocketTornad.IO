@@ -14,6 +14,8 @@ import tornad_io.websocket.flash
 import tornad_io.polling
 import tornad_io.socket_io
 
+import beaker.session
+
 logging.getLogger().setLevel(logging.DEBUG)
 # TODO - Monkey Patchable package object?
 PROTOCOLS = {
@@ -49,6 +51,18 @@ class SocketIOHandler(tornado.web.RequestHandler):
             protocol = PROTOCOLS.get(proto_type, None)
             if protocol and issubclass(protocol, tornad_io.socket_io.SocketIOProtocol):
                 self.protocol = protocol(self)
+                if kwargs['session_id']:
+                    self.protocol.info("Session ID passed to invocation... (%s)" % kwargs['session_id'])
+                    sess = beaker.session.Session(kwargs, id=kwargs['session_id'])
+                    if sess.is_new:
+                        raise Exception('Invalid Session ID.  Could not find existing client in sessions.')
+
+                    if not sess.has_key('output_handle') and sess['output_handle']:
+                        raise Exception('Invalid Session.  Could not find a valid output handle.')
+
+                    self.protocol.handshaked = True
+                    self.protocol.connected = True
+                    self.protocol.session = sess
                 self.protocol._execute(transforms, *extra, **kwargs)
             else:
                 raise Exception("Handler for protocol '%s' is currently unavailable." % protocol)

@@ -13,6 +13,7 @@ class PollingSocketIOHandler(SocketIOProtocol):
         self.debug("Initializing PollingSocketIOHandler...")
         tornado.web.RequestHandler.__init__(self, self.handler.application, self.handler.request)
 
+
     @tornado.web.asynchronous
     def get(self, *args, **kwargs):
         self.debug("[request] Polling GET (args: %s kwargs: %s) " % (args, kwargs))
@@ -26,12 +27,16 @@ class PollingSocketIOHandler(SocketIOProtocol):
     def options(self, *args, **kwargs):
         """Called for Cross Origin Resource Sharing Preflight message... Returns access headers."""
         self.debug("OPTIONS (args: %s kwargs: %s headers: %s) " % (args, kwargs, self.request.headers))
+        self.preflight()
+        self.finish()
+
+    @tornado.web.asynchronous
+    def preflight(self):
+        """Called for Cross Origin Resource Sharing Preflight message... Returns access headers."""
         if self.request.headers.has_key('Origin') and self.verify_origin(self.request.headers['Origin']):
             self.set_header('Access-Control-Allow-Origin', self.request.headers['Origin'])
             if self.request.headers.has_key('Cookie'):
                 self.set_header('Access-Control-Allow-Credentials', True)
-        self.finish()
-
 
 
 
@@ -42,10 +47,6 @@ class XHRPollingSocketIOHandler(PollingSocketIOHandler):
         self.reset_timeout()
         self.set_header("Content-Type", "text/plain; charset=UTF-8")
         self.set_header("Content-Length", len(message))
-        if self.request.headers.has_key('Origin') and self.verify_origin(self.request.headers['Origin']):
-            self.set_header('Access-Control-Allow-Origin', self.request.headers['Origin'])
-            if self.request.headers.has_key('Cookie'):
-                self.set_header('Access-Control-Allow-Credentials', True)
         self.write(message)
 
 class XHRMultiPartSocketIOHandler(PollingSocketIOHandler):
@@ -62,22 +63,20 @@ class XHRMultiPartSocketIOHandler(PollingSocketIOHandler):
     @tornado.web.asynchronous
     def post(self, *args, **kwargs):
         self.set_header('Content-Type', 'text/plain')
+        self.preflight()
         data = self.get_argument('data')
         self.debug("[Multipart] Polling POST data: %s" % (data))
-        #self.async_callback(self._on_message)(
-        #        data.decode("utf-8", "replace"))
-        self._on_message(data.decode("utf-8", "replace"))
+        self.async_callback(self._on_message)(
+                data.decode("utf-8", "replace"))
+        #self.open(*args, **kwargs)
         self.write('ok')
-        
+        self.finish()
 
 
     @tornado.web.asynchronous
     def _write(self, message):
         self.reset_timeout()
-        if self.request.headers.has_key('Origin') and self.verify_origin(self.request.headers['Origin']):
-            self.set_header('Access-Control-Allow-Origin', self.request.headers['Origin'])
-            if self.request.headers.has_key('Cookie'):
-                self.set_header('Access-Control-Allow-Credentials', True)
+        self.preflight()
         self.write("Content-Type: text/plain; charset=us-ascii\n\n")
         self.write(message + '\n')
         self.write('--socketio\n')

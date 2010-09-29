@@ -101,17 +101,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
 
         self.connected = True
 
-        if kwargs['session_id']:
-            self.info("Session ID passed to invocation... (%s)" % kwargs['session_id'])
-            sess = beaker.session.Session(kwargs, id=kwargs['session_id'])
-            if sess.is_new:
-                raise Exception('Invalid Session ID.  Could not find existing client in sessions.')
 
-            if not sess.has_key('output_handle') and sess['output_handle']:
-                raise Exception('Invalid Session.  Could not find a valid output handle.')
-
-            self.handshaked = True
-            self.session = sess
 
         if not self.handshaked:
             self.session = beaker.session.Session(kwargs)
@@ -172,14 +162,12 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         Encodes in Socket.IO protocol and
         ensures it doesn't send if session
         isn't fully open yet."""
-        self.debug("Writing a message: %s" % (message))
+        self.debug("Writing a message: %s[ Session : %s ] " % (message, self.session))
 
         if self.asynchronous:
             out_fh = self.session['output_handle']
         else:
             out_fh = self
-
-        out_fh = self
 
         self.debug("Am I asnychronous? %s out_fh: %s" % (self.asynchronous, out_fh))
 
