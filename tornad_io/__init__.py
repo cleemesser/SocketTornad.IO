@@ -40,11 +40,12 @@ class SocketIOHandler(tornado.web.RequestHandler):
         self.conn_args = args
         self.conn_kwargs = kwargs
         try:
-            # NOTE - Putting extra parens in your extraRE may cause breakage.
-            # TODO - Support named groups?
-            extra = args[:-2]
-            proto_type, proto_init = args[-2:]
-            logging.debug("Initializing %s(%s) ... Extra Data: %s" % (proto_type, proto_init, extra))
+            extra = kwargs['extra']
+            proto_type = kwargs['protocol']
+            proto_init = kwargs['protocol_init']
+            session_id = kwargs['session_id']
+            logging.debug("request method %s" % self.request.method)
+            logging.debug("Initializing %s(%s) Session ID: %s... Extra Data: %s [PATH: %s XHR PATH: %s]" % (proto_type, proto_init, session_id, extra, kwargs['resource'], kwargs.get('xhr_path', None)))
             protocol = PROTOCOLS.get(proto_type, None)
             if protocol and issubclass(protocol, tornad_io.socket_io.SocketIOProtocol):
                 self.protocol = protocol(self)
@@ -96,16 +97,20 @@ class SocketIOHandler(tornado.web.RequestHandler):
         # TODO - Support named groups
         #return (r"/%s/((xhr-polling|xhr-multipart|jsonp-polling|htmlfile)/)?/?/(\d*)/(%s)" % (resource, extraRE), cls)
         if extraRE:
-            if extraRE[0] != '(':
-                extraRE = r"(%s)" % extraRE
+            if extraRE[0] != '(?P<extra>':
+                if extraRE[0] == '(':
+                    extraRE = r'(?P<extra>%s)' % extraRE
+                else:
+                    extraRE = r"(?P<extra>%s)" % extraRE
             if extraSep:
                 extraRE = extraSep + extraRE
         else:
-            extraRE = "()"
+            extraRE = "(?P<extra>)"
 
         protoRE = "(%s)" % "|".join(PROTOCOLS.keys())
-        logging.debug("ProtoRE: %s" % protoRE)
-        return (r"/%s%s/%s/?/?(\d*)" % (resource, extraRE, protoRE), cls)
+        route = (r"/(?P<resource>%s)%s/(?P<protocol>%s)/?/?(?P<protocol_init>\d*?)/?(?P<session_id>[0-9a-zA-Z]*?)/?(?P<xhr_path>\w*?)" % (resource, extraRE, protoRE), cls)
+        logging.debug("Route: '%s'" % str(route))
+        return route
 
 
 class TestHandler(SocketIOHandler):
@@ -113,7 +118,7 @@ class TestHandler(SocketIOHandler):
         logging.debug("[echo] %s" % message)
         self.send("[echo] %s" % message)
 
-testRoute = TestHandler.routes("searchTest", "(123)(.*)", extraSep='/')
+testRoute = TestHandler.routes("searchTest", "(?P<sec_a>123)(?P<sec_b>.*)", extraSep='/')
 application = tornado.web.Application([
     testRoute
 ])
