@@ -27,10 +27,13 @@ import tornad_io.socket_io
 
 class WebSocketIOHandler(tornad_io.socket_io.SocketIOProtocol, 
                          tornado.websocket.WebSocketHandler):
-    def __init__(self, application, request, transforms, *args, **kwargs):
-        tornad_io.socket_io.SocketIOProtocol.__init__(self, application, request, transforms, *args, **kwargs)
+
+    handler = None
+
+    def __init__(self, handler):
+        tornad_io.socket_io.SocketIOProtocol.__init__(self, handler)
         logging.debug("Initializing WebSocketIOHandler...")
-        tornado.websocket.WebSocketHandler.__init__(self, application, request)
+        tornado.websocket.WebSocketHandler.__init__(self, self.handler.application, self.handler.request)
 
     def _on_end_delimiter(self, frame):
         """ Override the default on_message handler to decode first """
@@ -43,17 +46,6 @@ class WebSocketIOHandler(tornad_io.socket_io.SocketIOProtocol,
     def on_open(self, *args, **kwargs):
         """Invoked when a protocol socket is opened."""
         logging.debug("[wsio] Opened Socket: args - %s, kwargs - %s" % (args, kwargs))
-
-    def on_message(self, message):
-        """Handle incoming messages on the protocol socket
-        This method *must* be overloaded
-        TODO - Abstract Method imports via ABC
-        """
-        logging.debug("[wsio] Message On Socket: message - %s" % (message))
-
-    def on_close(self):
-        """Invoked when the protocol socket is closed."""
-        logging.debug("[wsio] Closed Socket")
 
     def _abort(self):
         logging.debug("Aborting WebSocketIOHandler.")
@@ -69,3 +61,4 @@ class WebSocketIOHandler(tornad_io.socket_io.SocketIOProtocol,
         assert isinstance(message, str)
         logging.debug("Writing WebSocket Message: %s" % (message))
         self.stream.write("\x00" + message + "\xff")
+

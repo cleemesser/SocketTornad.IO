@@ -10,6 +10,9 @@ from decimal import Decimal
 import tornado.escape
 import tornado.web
 import tornado.httpserver
+
+from tornad_io import util
+
 from tornado import ioloop
 
 # Uses Beaker for session management which enables persistence, etc.
@@ -37,6 +40,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
 
 
     ioloop = ioloop.IOLoop.instance()
+    #ioloop = ioloop.IOLoop()
 
     connected = False
     handshaked = False
@@ -48,11 +52,13 @@ class SocketIOProtocol(tornado.web.RequestHandler):
 
     _heartbeats = 0
 
+    handler = None
 
-    def __init__(self, application, request, transforms, *args, **kwargs):
+    def __init__(self, handler):
         logging.debug("Initializing SocketIOProtocol...")
-        self.application = application
-        self.request = request
+        self.handler = handler
+        self.application = self.handler.application
+        self.request = self.handler.request
 
 
     def open(self, *args, **kwargs):
@@ -84,21 +90,27 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         # TODO Timeout data, etc
         if self.options['timeout']:
             logging.debug("Setting up call back for %d ms" % self.options['timeout'])
-            self.scheduler = ioloop.PeriodicCallback(self._heartbeat, self.options['timeout'], io_loop=self.ioloop)
-            self.scheduler.start()
+            self._timeout = util.PeriodicCallback(self._heartbeat, self.options['timeout'])
+            self._timeout.start()
 
-        logging.debug("Sending on Open... IO Loop: %s" % self.ioloop)
         self.async_callback(self.on_open)(*args, **kwargs)
 
 
     def _heartbeat(self):
         # TODO - Check we *RECEIVE* heartbeats
-        self._heartbeats += 1
-        logging.debug("Sending Heartbeat %d" % (self._heartbeats))
-        self.send('~h~%d' % self._heartbeats)
+        if self.stream.socket == None:
+            logging.debug("[%s] closed stream? %s Connected? %s" % (self.session.id, self.stream.closed(), self.connected))
+            logging.info("Connection no longer active.  Shutting down heartbeat scheduler.")
+            self._timeout.stop()
+            self._abort()
+        else:
+            self._heartbeats += 1
+            logging.debug("[%s] Sending Heartbeat %d" % (self.session.id, self._heartbeats))
+            self.send('~h~%d' % self._heartbeats)
 
     def on_heartbeat(self, beat):
         if beat == self._heartbeats:
+            logging.debug("[%s] Received a heartbeat... " % beat)
             self.reset_timeout()
         else:
             logging.warning("Mismatch on heartbeat count.  Timeout may occur. Got %d but expected %d" % (beat, self._heartbeats)) # This logging method may race
@@ -112,7 +124,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         Encodes in Socket.IO protocol and
         ensures it doesn't send if session
         isn't fully open yet."""
-        logging.debug("Writing a message: %s" % (message))
+        logging.debug("[%s] Writing a message: %s {%s}" % (self.session.id, message, type(message)))
         if isinstance(message, list):
             for m in message:
                 self.send(m)
@@ -129,7 +141,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         if isinstance(message, list):
             for m in message:
                 encoded += self._encode(message)
-        elif not isinstance(message, str) and isinstance(message, (object, dict)):
+        elif not isinstance(message, (unicode, str)) and isinstance(message, (object, dict)):
             """
             Strings are objects... messy test.
             """
@@ -137,7 +149,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
                 logging.debug("Encoding an Object or Dictionary: %s" % message)
                 encoded += self._encode('~j~' + json.dumps(message, use_decimal=True))
         else:
-            encoded += FRAME + str(len(message)) + FRAME + str(message)
+            encoded += "%s%d%s%s" % (FRAME, len(message), FRAME, message)
 
         logging.debug("Encoded Message: %s", encoded)
 
@@ -158,7 +170,8 @@ class SocketIOProtocol(tornado.web.RequestHandler):
             in_frame = data[:3]
             if in_frame == '~h~':
                 logging.debug("Heartbeat frame.")
-                self.on_heartbeat(int(data[3:]))
+                self.async_callback(self.on_heartbeat)(int(data[3:]))
+                continue
             elif in_frame == '~j~':
                 logging.debug("JSON Data.")
                 data = json.loads(data[3:], parse_float=Decimal)
@@ -169,28 +182,9 @@ class SocketIOProtocol(tornado.web.RequestHandler):
     def _on_message(self, message):
         """ Internal handler for new incoming messages.
         After decoding, invokes on_message"""
-        self.async_callback(self.on_message)(
-                            self._decode(message))
-
-
-    def on_open(self, *args, **kwargs):
-        """Invoked when a protocol socket is opened...
-        Passes in the args & kwargs from the route
-        as Tornado deals w/ regex groups, via _execute method.
-        See the tornado docs and code for detail."""
-        logging.debug("[socketio protocol] Opened Socket: args - %s, kwargs - %s" % (args, kwargs))
-
-    def on_message(self, message):
-        """Handle incoming messages on the protocol socket
-        This method *must* be overloaded
-        TODO - Abstract Method imports via ABC
-        """
-        logging.debug("[socketio protocol] Message On Socket: message - %s" % (message))
-        raise NotImplementedError
-
-    def on_close(self):
-        """Invoked when the protocol socket is closed."""
-        logging.debug("[socketio protocol] Closed Socket")
+        messages = self._decode(message)
+        for msg in messages:
+            self.async_callback(self.on_message)(msg)
 
     def _write(self, message):
         """Write method which all protocols must define to
@@ -217,9 +211,27 @@ class SocketIOProtocol(tornado.web.RequestHandler):
                 logging.error("Uncaught exception in %s",
                               self.request.path, exc_info=True)
                 self._abort()
-        logging.debug("[socketio protocol] Setup callback wrapper for async: %s" % callback)
+        #logging.debug("[socketio protocol] Setup callback wrapper for async: %s" % callback)
         return wrapper
 
     def _abort(self):
         self.connected = False
         self.stream.close()
+
+    def on_open(self, *args, **kwargs):
+        """Invoked when a protocol socket is opened...
+        Passes in the args & kwargs from the route
+        as Tornado deals w/ regex groups, via _execute method.
+        See the tornado docs and code for detail."""
+        self.handler.on_open(*args, **kwargs)
+
+    def on_message(self, message):
+        """Handle incoming messages on the protocol socket
+        This method *must* be overloaded
+        TODO - Abstract Method imports via ABC
+        """
+        self.handler.on_message(message)
+
+    def on_close(self):
+        """Invoked when the protocol socket is closed."""
+        self.handler.on_close()

@@ -23,7 +23,9 @@ PROTOCOLS = {
     "flashsocket": type('FlashSocketIOHandler', (tornad_io.websocket.WebSocketIOHandler,), {}), # TODO - Bind flash policy server
 }
 
-class SocketIOHandler(tornad_io.socket_io.SocketIOProtocol):
+class SocketIOHandler(tornado.web.RequestHandler):
+
+    protocol = None
 
     def __init__(self, application, request):
         tornado.web.RequestHandler.__init__(self, application, request)
@@ -43,8 +45,8 @@ class SocketIOHandler(tornad_io.socket_io.SocketIOProtocol):
             logging.debug("Initializing %s(%s) ... Extra Data: %s" % (proto_type, proto_init, extra))
             protocol = PROTOCOLS.get(proto_type, None)
             if protocol and issubclass(protocol, tornad_io.socket_io.SocketIOProtocol):
-                protocol = protocol.__init__(self, self.application, self.request, transforms, *extra, **kwargs)
-                protocol._execute(transforms, *extra, **kwargs)
+                self.protocol = protocol(self)
+                self.protocol._execute(transforms, *extra, **kwargs)
             else:
                 raise Exception("Handler for protocol '%s' is currently unavailable." % protocol)
         except ValueError as e:
@@ -52,17 +54,44 @@ class SocketIOHandler(tornad_io.socket_io.SocketIOProtocol):
             self._abort(400)
             return
 
+    def send(self, message):
+        """Message to send data to the client.
+        Encodes in Socket.IO protocol and
+        ensures it doesn't send if session
+        isn't fully open yet."""
+        self.protocol.send(message)
+
+    def on_open(self, *args, **kwargs):
+        """Invoked when a protocol socket is opened...
+        Passes in the args & kwargs from the route
+        as Tornado deals w/ regex groups, via _execute method.
+        See the tornado docs and code for detail."""
+        logging.debug("[socketio protocol] Opened Socket: args - %s, kwargs - %s" % (args, kwargs))
+
+    def on_message(self, message):
+        """Handle incoming messages on the protocol socket
+        This method *must* be overloaded
+        TODO - Abstract Method imports via ABC
+        """
+        logging.debug("[socketio protocol] Message On Socket: message - %s" % (message))
+        raise NotImplementedError
+
+    def on_close(self):
+        """Invoked when the protocol socket is closed."""
+        logging.debug("[socketio protocol] Closed Socket")
 
 
     def _abort(self, error_code=None):
         """ Kill the connection """
         self.active = False
         self.stream.close()
+        self.protocol._abort()
         if error_code:
             raise HTTPError(error_code)
 
     @classmethod
     def routes(cls, resource, extraRE=None, extraSep=None):
+        # TODO - Support named groups
         #return (r"/%s/((xhr-polling|xhr-multipart|jsonp-polling|htmlfile)/)?/?/(\d*)/(%s)" % (resource, extraRE), cls)
         if extraRE:
             if extraRE[0] != '(':
@@ -77,7 +106,12 @@ class SocketIOHandler(tornad_io.socket_io.SocketIOProtocol):
         return (r"/%s%s/%s/?/?(\d*)" % (resource, extraRE, protoRE), cls)
 
 
-testRoute = SocketIOHandler.routes("searchTest", "(123)(.*)", extraSep='/')
+class TestHandler(SocketIOHandler):
+    def on_message(self, message):
+        logging.debug("[echo] %s" % message)
+        self.send("[echo] %s" % message)
+
+testRoute = TestHandler.routes("searchTest", "(123)(.*)", extraSep='/')
 application = tornado.web.Application([
     testRoute
 ])
