@@ -65,6 +65,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
     }
 
     _heartbeats = 0
+    _heartbeat_timeout = None
 
     handler = None
 
@@ -161,14 +162,16 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         self._write_queue = []
         self.send(payload)
 
-        # TODO Logging full info on connection?
-        # TODO Timeout data, etc
         if self.config['timeout']:
-            self._heartbeat_timeout = ioloop.PeriodicCallback(self._heartbeat, self.config['timeout'])
-            self._heartbeat_timeout.start()
+            self.reset_timeout()
 
         self.async_callback(self.on_open)(*args, **kwargs)
 
+    def reset_timeout(self):
+        if self._heartbeat_timeout:
+            self._heartbeat_timeout.stop() # shut off the old one...
+        self._heartbeat_timeout = ioloop.PeriodicCallback(self._heartbeat, self.config['timeout'])
+        self._heartbeat_timeout.start()
 
     def _heartbeat(self):
         # TODO - Check we *RECEIVE* heartbeats
@@ -321,5 +324,6 @@ class SocketIOProtocol(tornado.web.RequestHandler):
     def on_close(self):
         """Invoked when the protocol socket is closed."""
         self.debug("Shutting down heartbeat schedule; connection closed.")
-        self._heartbeat_timeout.stop()
+        if self._heartbeat_timeout:
+            self._heartbeat_timeout.stop()
         self.handler.on_close()

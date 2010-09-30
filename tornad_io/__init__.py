@@ -17,6 +17,7 @@ import tornad_io.socket_io
 import beaker.session
 
 logging.getLogger().setLevel(logging.DEBUG)
+
 # TODO - Monkey Patchable package object?
 PROTOCOLS = {
     "xhr-polling": tornad_io.polling.XHRPollingSocketIOHandler,
@@ -41,6 +42,7 @@ class SocketIOHandler(tornado.web.RequestHandler):
     def _execute(self, transforms, *args, **kwargs):
         self.conn_args = args
         self.conn_kwargs = kwargs
+        logging.debug("Enabled Protocols: %s" % self.application.settings['enabled_protocols'])
         try:
             extra = kwargs['extra']
             proto_type = kwargs['protocol']
@@ -48,7 +50,9 @@ class SocketIOHandler(tornado.web.RequestHandler):
             session_id = kwargs['session_id']
             logging.debug("Initializing %s(%s) Session ID: %s... Extra Data: %s [PATH: %s XHR PATH: %s JSONP Index: %s]" % (proto_type, proto_init, session_id, extra, kwargs['resource'], kwargs.get('xhr_path', None), kwargs.get("jsonp_index", None)))
             protocol = PROTOCOLS.get(proto_type, None)
-            if protocol and issubclass(protocol, tornad_io.socket_io.SocketIOProtocol):
+            if proto_type in self.application.settings['enabled_protocols']\
+                         and protocol\
+                         and issubclass(protocol, tornad_io.socket_io.SocketIOProtocol):
                 self.protocol = protocol(self)
                 if kwargs['session_id']:
                     self.protocol.debug("Session ID passed to invocation... (%s)" % kwargs['session_id'])
@@ -126,6 +130,44 @@ class SocketIOHandler(tornado.web.RequestHandler):
         route = (r"/(?P<resource>%s)%s/(?P<protocol>%s)/?(?P<session_id>[0-9a-zA-Z]*?)/?((?P<protocol_init>\d*?)|(?P<xhr_path>\w*?))/?(?P<jsonp_index>\d*?)" % (resource, extraRE, protoRE), cls)
         return route
 
+class SocketIOServer(tornado.httpserver.HTTPServer):
+    """HTTP Server which does some configuration and automatic setup
+    of Socket.IO based on configuration.
+    Starts the IOLoop and listening automatically
+    in contrast to the Tornado default behavior.
+    If FlashSocket is enabled, starts up the policy server also."""
+
+    def __init__(self, application, no_keep_alive=False, io_loop=None,
+                 xheaders=False, ssl_options=None, socket_io_port=8888, 
+                 flash_policy_port=843, flash_policy_file='flashpolicy.xml', 
+                 enabled_protocols=['websocket', 'flashsocket', 'xhr-multipart', 'xhr-polling', 'jsonp-polling', 'htmlfile']):
+        """Initializes the server with the given request callback.
+
+        If you use pre-forking/start() instead of the listen() method to
+        start your server, you should not pass an IOLoop instance to this
+        constructor. Each pre-forked child process will create its own
+        IOLoop instance after the forking process.
+        """
+        logging.debug("Starting up SocketIOServer with settings: %s" % application.settings)
+
+        enabled_protocols = application.settings.get('enabled_protocols', ['websocket', 'flashsocket', 'xhr-multipart', 'xhr-polling', 'jsonp-polling', 'htmlfile'])
+        flash_policy_file = application.settings.get('flash_policy_file', 'flashpolicy.xml')
+        flash_policy_port = application.settings.get('flash_policy_port', 843)
+        socket_io_port = application.settings.get('socket_io_port', 8888)
+
+        tornado.httpserver.HTTPServer.__init__(self, application, no_keep_alive, io_loop,
+                                      xheaders, ssl_options)
+        logging.info("Starting up SocketTornad.IO Server on Port '%s'" % socket_io_port)
+        self.listen(socket_io_port)
+
+        if 'flashsocket' in enabled_protocols:
+            logging.info("Flash Sockets enabled, starting Flash Policy Server on Port '%s'" % flash_policy_port)
+            flash_policy = tornad_io.websocket.flash.FlashPolicyServer(port=flash_policy_port, policy_file=flash_policy_file)
+
+        io_loop = io_loop or tornado.ioloop.IOLoop.instance()
+        logging.info("Entering IOLoop...")
+        io_loop.start()
+
 
 class TestHandler(SocketIOHandler):
     def on_message(self, message):
@@ -135,11 +177,16 @@ class TestHandler(SocketIOHandler):
 testRoute = TestHandler.routes("searchTest", "(?P<sec_a>123)(?P<sec_b>.*)", extraSep='/')
 application = tornado.web.Application([
     testRoute
-])
+], enabled_protocols=['websocket', 'flashsocket', 'xhr-multipart', 'xhr-polling'],
+   flash_policy_port=8043, flash_policy_file='/etc/lighttpd/flashpolicy.xml',
+   socket_io_port=8888)
 
 if __name__ == "__main__":
-    flash_policy = tornad_io.websocket.flash.FlashPolicyServer()
-    http_server = tornado.httpserver.HTTPServer(application)
-    http_server.listen(8888)
-    tornado.ioloop.IOLoop.instance().start()
+    socketio_server = SocketIOServer(application)
+
+#if __name__ == "__main__":
+#    flash_policy = tornad_io.websocket.flash.FlashPolicyServer()
+#    http_server = tornado.httpserver.HTTPServer(application)
+#    http_server.listen(8888)
+#    tornado.ioloop.IOLoop.instance().start()
 

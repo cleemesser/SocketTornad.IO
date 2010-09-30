@@ -21,14 +21,15 @@ class FlashSocketIOHandler(tornad_io.websocket.WebSocketIOHandler):
         tornad_io.websocket.WebSocketIOHandler.__init__(self, handler)
 
 class FlashPolicyServer(object):
-    """Flash Policy server, listens on port 843 (otherwise useless)"""
+    """Flash Policy server, listens on port 843 by default (otherwise useless)"""
 
-    def __init__(self, policy_file='flashpolicy.xml'):
+    def __init__(self, port=843, policy_file='flashpolicy.xml'):
         self.policy_file = policy_file
+        self.port = port
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setblocking(0)
-        sock.bind(('', 843))
+        sock.bind(('', self.port))
         sock.listen(128)
         self.io_loop = ioloop.IOLoop.instance()
         callback = functools.partial(self.connection_ready, sock)
