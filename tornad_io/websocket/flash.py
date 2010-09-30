@@ -16,6 +16,8 @@ import tornad_io.websocket
 
 class FlashSocketIOHandler(tornad_io.websocket.WebSocketIOHandler):
 
+    protocol = 'flashsocket'
+
     def __init__(self, handler):
         logging.debug("Initializing FlashSocketIOHandler...")
         tornad_io.websocket.WebSocketIOHandler.__init__(self, handler)

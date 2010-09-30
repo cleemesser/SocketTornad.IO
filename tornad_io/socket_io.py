@@ -54,7 +54,9 @@ class SocketIOProtocol(tornado.web.RequestHandler):
     use_queuing = False
     connected = False
     handshaked = False
-    session = {'id': None}
+    session = None 
+    protocol = None
+
     _write_queue = []
     # TODO - Pass config in at constructor and allow overrides of specific keys
     config = {
@@ -71,22 +73,22 @@ class SocketIOProtocol(tornado.web.RequestHandler):
 
     def debug(self, message):
         logging.debug("[%s | %s | %s]  %s" %
-                      (getattr(self.session, 'id', None), self.request.method, self.__class__.__name__,
+                      (getattr(self.session, 'id', None), self.request.method, self.protocol,
                        message))
 
     def info(self, message):
         logging.info("[%s | %s | %s]  %s" %
-                      (getattr(self.session, 'id', None), self.request.method, self.__class__.__name__,
+                      (getattr(self.session, 'id', None), self.request.method, self.protocol,
                        message))
 
     def error(self, message, exception, **kwargs):
         logging.error("[%s | %s | %s]  %s" %
-                      (getattr(self.session, 'id', None), self.request.method, self.__class__.__name__,
+                      (getattr(self.session, 'id', None), self.request.method, self.protocol,
                      message), exception, **kwargs)
 
     def warning(self, message):
         logging.warning("[%s | %s | %s]  %s" %
-                       (getattr(self.session, 'id', None), self.request.method, self.__class__.__name__,
+                       (getattr(self.session, 'id', None), self.request.method, self.protocol,
                        message))
 
 
@@ -165,7 +167,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         if self.config['timeout']:
             self.reset_timeout()
 
-        self.async_callback(self.on_open)(*args, **kwargs)
+        self.async_callback(self.handler.on_open)(*args, **kwargs)
 
     def reset_timeout(self):
         if self._heartbeat_timeout:
@@ -307,23 +309,23 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         self.connected = False
         #self.stream.close()
 
-    def on_open(self, *args, **kwargs):
-        """Invoked when a protocol socket is opened...
-        Passes in the args & kwargs from the route
-        as Tornado deals w/ regex groups, via _execute method.
-        See the tornado docs and code for detail."""
-        self.handler.on_open(*args, **kwargs)
+    #def on_open(self, *args, **kwargs):
+    #    """Invoked when a protocol socket is opened...
+    #    Passes in the args & kwargs from the route
+    #    as Tornado deals w/ regex groups, via _execute method.
+    #    See the tornado docs and code for detail."""
 
     def on_message(self, message):
         """Handle incoming messages on the protocol socket
         This method *must* be overloaded
         TODO - Abstract Method imports via ABC
         """
-        self.handler.on_message(message)
+        self.async_callback(self.handler.on_message)(message)
 
     def on_close(self):
         """Invoked when the protocol socket is closed."""
         self.debug("Shutting down heartbeat schedule; connection closed.")
         if self._heartbeat_timeout:
             self._heartbeat_timeout.stop()
-        self.handler.on_close()
+        self.async_callback(self.handler.on_close)()
+

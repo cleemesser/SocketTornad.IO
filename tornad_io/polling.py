@@ -47,6 +47,8 @@ class PollingSocketIOHandler(SocketIOProtocol):
 
 class XHRMultiPartSocketIOHandler(PollingSocketIOHandler):
 
+    protocol ='xhr-multipart'
+
     @tornado.web.asynchronous
     def get(self, *args, **kwargs):
         self.set_header('Content-Type', 'multipart/x-mixed-replace;boundary="socketio"')
@@ -77,6 +79,9 @@ class XHRMultiPartSocketIOHandler(PollingSocketIOHandler):
 class HTMLFileSocketIOHandler(PollingSocketIOHandler):
     """ TODO - Find a browser that supports this.  IE 7 and IE 8 didn't work right.
     It needs I believe 5 or 6"""
+
+    protocol = 'htmlfile'
+
     @tornado.web.asynchronous
     def get(self, *args, **kwargs):
         self.set_header('Content-Type', 'text/html')
@@ -103,6 +108,8 @@ class HTMLFileSocketIOHandler(PollingSocketIOHandler):
 
 class XHRPollingSocketIOHandler(PollingSocketIOHandler):
     use_queuing = True
+
+    protocol = 'xhr-polling'
 
     config = {
         'timeout': None, # No heartbeats in polling
@@ -151,6 +158,9 @@ class XHRPollingSocketIOHandler(PollingSocketIOHandler):
         self.finish()
 
 class JSONPPollingSocketIOHandler(XHRPollingSocketIOHandler):
+
+    protocol = 'jsonp-polling'
+
     @tornado.web.asynchronous
     def get(self, *args, **kwargs):
         self._index = kwargs.get('jsonp_index', None)

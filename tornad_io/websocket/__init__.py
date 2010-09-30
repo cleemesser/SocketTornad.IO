@@ -10,6 +10,7 @@ import tornad_io.socket_io
 class WebSocketIOHandler(tornad_io.socket_io.SocketIOProtocol, 
                          tornado.websocket.WebSocketHandler):
 
+    protocol = 'websocket'
     asynchronous = False
 
     def __init__(self, handler):

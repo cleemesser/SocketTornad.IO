@@ -30,7 +30,15 @@ PROTOCOLS = {
 
 class SocketIOHandler(tornado.web.RequestHandler):
 
-    protocol = None
+    protocol_impl = None
+
+    @property
+    def protocol(self):
+        return getattr(self.protocol_impl, "protocol", None)
+
+    @property
+    def session(self):
+        return getattr(self.protocol_impl, "session", None)
 
     def __init__(self, application, request):
         tornado.web.RequestHandler.__init__(self, application, request)
@@ -53,9 +61,9 @@ class SocketIOHandler(tornado.web.RequestHandler):
             if proto_type in self.application.settings['enabled_protocols']\
                          and protocol\
                          and issubclass(protocol, tornad_io.socket_io.SocketIOProtocol):
-                self.protocol = protocol(self)
+                self.protocol_impl = protocol(self)
                 if kwargs['session_id']:
-                    self.protocol.debug("Session ID passed to invocation... (%s)" % kwargs['session_id'])
+                    self.protocol_impl.debug("Session ID passed to invocation... (%s)" % kwargs['session_id'])
                     sess = beaker.session.Session(kwargs, id=kwargs['session_id'])
                     if sess.is_new:
                         raise Exception('Invalid Session ID.  Could not find existing client in sessions.')
@@ -63,10 +71,10 @@ class SocketIOHandler(tornado.web.RequestHandler):
                     if not sess.has_key('output_handle') and sess['output_handle']:
                         raise Exception('Invalid Session.  Could not find a valid output handle.')
 
-                    self.protocol.handshaked = True
-                    self.protocol.connected = True
-                    self.protocol.session = sess
-                self.protocol._execute(transforms, *extra, **kwargs)
+                    self.protocol_impl.handshaked = True
+                    self.protocol_impl.connected = True
+                    self.protocol_impl.session = sess
+                self.protocol_impl._execute(transforms, *extra, **kwargs)
             else:
                 raise Exception("Handler for protocol '%s' is currently unavailable." % protocol)
         except ValueError as e:
@@ -79,7 +87,7 @@ class SocketIOHandler(tornado.web.RequestHandler):
         Encodes in Socket.IO protocol and
         ensures it doesn't send if session
         isn't fully open yet."""
-        self.protocol.send(message)
+        self.protocol_impl.send(message)
 
     def on_open(self, *args, **kwargs):
         """Invoked when a protocol socket is opened...
@@ -107,7 +115,7 @@ class SocketIOHandler(tornado.web.RequestHandler):
         """ Kill the connection """
         self.active = False
         self.stream.close()
-        self.protocol._abort()
+        self.protocol_impl._abort()
         if error_code:
             raise tornado.web.HTTPError(error_code)
 
@@ -169,14 +177,22 @@ class SocketIOServer(tornado.httpserver.HTTPServer):
         io_loop.start()
 
 
-class TestHandler(SocketIOHandler):
+class EchoHandler(SocketIOHandler):
+    def on_open(self, *args, **kwargs):
+        logging.info("Socket.IO Client connected with protocol '%s' {session id: '%s'}" % (self.protocol, self.session.id))
+        logging.info("Extra Data for Open: '%s'" % (kwargs.get('extra', None)))
+
     def on_message(self, message):
         logging.info("[echo] %s" % message)
         self.send("[echo] %s" % message)
 
-testRoute = TestHandler.routes("searchTest", "(?P<sec_a>123)(?P<sec_b>.*)", extraSep='/')
+    def on_close(self):
+        logging.info("Closing Socket.IO Client for protocol '%s'" % (self.protocol))
+
+echoRoute = EchoHandler.routes("echoTest", "(?P<sec_a>123)(?P<sec_b>.*)", extraSep='/')
+
 application = tornado.web.Application([
-    testRoute
+    echoRoute
 ], enabled_protocols=['websocket', 'flashsocket', 'xhr-multipart', 'xhr-polling'],
    flash_policy_port=8043, flash_policy_file='/etc/lighttpd/flashpolicy.xml',
    socket_io_port=8888)
