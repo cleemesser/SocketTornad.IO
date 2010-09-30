@@ -46,13 +46,12 @@ class SocketIOHandler(tornado.web.RequestHandler):
             proto_type = kwargs['protocol']
             proto_init = kwargs['protocol_init']
             session_id = kwargs['session_id']
-            logging.debug("request method %s" % self.request.method)
             logging.debug("Initializing %s(%s) Session ID: %s... Extra Data: %s [PATH: %s XHR PATH: %s]" % (proto_type, proto_init, session_id, extra, kwargs['resource'], kwargs.get('xhr_path', None)))
             protocol = PROTOCOLS.get(proto_type, None)
             if protocol and issubclass(protocol, tornad_io.socket_io.SocketIOProtocol):
                 self.protocol = protocol(self)
                 if kwargs['session_id']:
-                    self.protocol.info("Session ID passed to invocation... (%s)" % kwargs['session_id'])
+                    self.protocol.debug("Session ID passed to invocation... (%s)" % kwargs['session_id'])
                     sess = beaker.session.Session(kwargs, id=kwargs['session_id'])
                     if sess.is_new:
                         raise Exception('Invalid Session ID.  Could not find existing client in sessions.')
@@ -83,19 +82,21 @@ class SocketIOHandler(tornado.web.RequestHandler):
         Passes in the args & kwargs from the route
         as Tornado deals w/ regex groups, via _execute method.
         See the tornado docs and code for detail."""
-        logging.debug("[socketio protocol] Opened Socket: args - %s, kwargs - %s" % (args, kwargs))
+        #logging.debug("[socketio protocol] Opened Socket: args - %s, kwargs - %s" % (args, kwargs))
+        pass
 
     def on_message(self, message):
         """Handle incoming messages on the protocol socket
         This method *must* be overloaded
         TODO - Abstract Method imports via ABC
         """
-        logging.debug("[socketio protocol] Message On Socket: message - %s" % (message))
-        raise NotImplementedError
+        logging.warning("[socketio protocol] Message On Socket: message - %s" % (message))
+        raise NotImplementedError, "You must define an on_message handler."
 
     def on_close(self):
         """Invoked when the protocol socket is closed."""
-        logging.debug("[socketio protocol] Closed Socket")
+        #logging.debug("[socketio protocol] Closed Socket")
+        pass
 
 
     def _abort(self, error_code=None):
@@ -104,7 +105,7 @@ class SocketIOHandler(tornado.web.RequestHandler):
         self.stream.close()
         self.protocol._abort()
         if error_code:
-            raise HTTPError(error_code)
+            raise tornado.web.HTTPError(error_code)
 
     @classmethod
     def routes(cls, resource, extraRE=None, extraSep=None):
@@ -122,14 +123,13 @@ class SocketIOHandler(tornado.web.RequestHandler):
             extraRE = "(?P<extra>)"
 
         protoRE = "(%s)" % "|".join(PROTOCOLS.keys())
-        route = (r"/(?P<resource>%s)%s/(?P<protocol>%s)/?/?(?P<protocol_init>\d*?)/?(?P<session_id>[0-9a-zA-Z]*?)/?(?P<xhr_path>\w*?)" % (resource, extraRE, protoRE), cls)
-        logging.debug("Route: '%s'" % str(route))
+        route = (r"/(?P<resource>%s)%s/(?P<protocol>%s)/?(?P<session_id>[0-9a-zA-Z]*?)/?((?P<protocol_init>\d*?)|(?P<xhr_path>\w*?))/?" % (resource, extraRE, protoRE), cls)
         return route
 
 
 class TestHandler(SocketIOHandler):
     def on_message(self, message):
-        logging.debug("[echo] %s" % message)
+        logging.info("[echo] %s" % message)
         self.send("[echo] %s" % message)
 
 testRoute = TestHandler.routes("searchTest", "(?P<sec_a>123)(?P<sec_b>.*)", extraSep='/')

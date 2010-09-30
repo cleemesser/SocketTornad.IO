@@ -39,8 +39,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
     Tornado Distribution, written by Jacob Kristhammar"""
 
 
-    ioloop = ioloop.IOLoop.instance()
-    #ioloop = ioloop.IOLoop()
+    io_loop = ioloop.IOLoop.instance()
 
     # Indicates if it is a single bidirectional socket
     # or a set of asynch messages. Controls output handling.
@@ -50,10 +49,12 @@ class SocketIOProtocol(tornado.web.RequestHandler):
     handshaked = False
     session = {'id': None}
     _write_queue = []
-    # TODO - Pass config in at constructor
+    # TODO - Pass config in at constructor and allow overrides of specific keys
     config = {
         'timeout': 12000,
-        'origins': [('*', '*')] # Tuple of (host, port)... * acceptable
+        'duration': 20000,
+        'closeTimeout': 8000,
+        'origins': [('*', '*')], # Tuple of (host, port)... * acceptable
     }
 
     _heartbeats = 0
@@ -96,7 +97,6 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         This method is similar to the Client._payload method
         from Socket.IO-Node
         """
-        self.debug("Session Open. Creating session.")
         payload = []
 
         self.connected = True
@@ -110,17 +110,14 @@ class SocketIOProtocol(tornado.web.RequestHandler):
 
         self.session['output_handle'] = self
         self.session.save()
-        self.debug("Saved Session: %s" % self.session)
 
         payload.extend(self._write_queue)
         self._write_queue = []
-        self.debug("Writing out Payload: %s \n" % (payload))
         self.send(payload)
 
         # TODO Logging full info on connection?
         # TODO Timeout data, etc
         if self.config['timeout']:
-            self.debug("Setting up call back for %d ms" % self.config['timeout'])
             self._timeout = util.PeriodicCallback(self._heartbeat, self.config['timeout'])
             self._timeout.start()
 
@@ -131,17 +128,15 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         # TODO - Check we *RECEIVE* heartbeats
         try:
             self._heartbeats += 1
-            self.debug("Sending Heartbeat %d" % (self._heartbeats))
             self.send('~h~%d' % self._heartbeats)
         except Exception as e:
-            #logging.debug("[%s] closed stream? %s Connected? %s" % (self.session.id, self.stream.closed(), self.connected))
-            self.info("Connection no longer active.  Shutting down heartbeat scheduler.")
+            self.debug("Connection no longer active.  Shutting down heartbeat scheduler.")
             self._timeout.stop()
             self._abort()
 
     def on_heartbeat(self, beat):
         if beat == self._heartbeats:
-            self.debug("[%s] Received a heartbeat... " % beat)
+            #self.debug("[%s] Received a heartbeat... " % beat)
             self.reset_timeout()
         else:
             self.warning("Mismatch on heartbeat count.  Timeout may occur. Got %d but expected %d" % (beat, self._heartbeats)) # This logging method may race
@@ -149,27 +144,30 @@ class SocketIOProtocol(tornado.web.RequestHandler):
     def reset_timeout(self):
         pass
 
-    def verify_origin(self, origin):
-        self.info("Verify Origin: %s" % origin)
-        origins = self.config['origins']
-        url = urlparse.urlparse(origin)
-        host = url.hostname
-        port = url.port
-        return filter(lambda t: (t[0] == '*' or t[0].lower() == host.lower()) and (t[1] == '*' or  t[1] == int(port)), origins)
+    def verify_origin(self):
+        origin = self.request.headers.get("Origin", None)
+        if origin:
+            self.debug("Verify Origin: %s" % origin)
+            origins = self.config['origins']
+            url = urlparse.urlparse(origin)
+            host = url.hostname
+            port = url.port
+            return filter(lambda t: (t[0] == '*' or t[0].lower() == host.lower()) and (t[1] == '*' or  t[1] == int(port)), origins)
+        else:
+            self.warning("No Origin.  Verification Fails.")
+            return False
 
     def send(self, message):
         """Message to send data to the client.
         Encodes in Socket.IO protocol and
         ensures it doesn't send if session
         isn't fully open yet."""
-        self.debug("Writing a message: %s[ Session : %s ] " % (message, self.session))
 
         if self.asynchronous:
             out_fh = self.session['output_handle']
         else:
             out_fh = self
 
-        self.debug("Am I asnychronous? %s out_fh: %s" % (self.asynchronous, out_fh))
 
         if isinstance(message, list):
             for m in message:
@@ -196,14 +194,12 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         else:
             encoded += "%s%d%s%s" % (FRAME, len(message), FRAME, message)
 
-        self.debug("Encoded Message: %s" % encoded)
 
         return encoded
 
     def _decode(self, message):
         """decode message from Socket.IO Protocol."""
         messages = []
-        self.debug("Decoding Message: %s" % message)
         parts = message.split("~m~")[1:]
         for i in range(1, len(parts), 2):
             l = int(parts[i - 1])
@@ -251,7 +247,6 @@ class SocketIOProtocol(tornado.web.RequestHandler):
                 self.error("Uncaught exception in %s",
                               self.request.path, exc_info=True)
                 self._abort()
-        #logging.debug("[socketio protocol] Setup callback wrapper for async: %s" % callback)
         return wrapper
 
     def _abort(self):
