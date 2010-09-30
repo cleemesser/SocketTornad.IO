@@ -21,7 +21,6 @@ setup(
         'pyCLI >= 1.1.1',
         'simplejson >= 2.1.0', # Decimal support
         'tornado >= 1.1.0',
-        'twisted', # for the flash service, at least for now.
         'beaker >= 1.5.3'
     ]
 )
