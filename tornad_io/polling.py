@@ -74,8 +74,34 @@ class XHRMultiPartSocketIOHandler(PollingSocketIOHandler):
         self.write('--socketio\n')
         self.flush()
 
-class XHRPollingSocketIOHandler(PollingSocketIOHandler):
+class HTMLFileSocketIOHandler(PollingSocketIOHandler):
+    """ TODO - Find a browser that supports this.  IE 7 and IE 8 didn't work right.
+    It needs I believe 5 or 6"""
+    @tornado.web.asynchronous
+    def get(self, *args, **kwargs):
+        self.set_header('Content-Type', 'text/html')
+        self.set_header('Connection', 'keep-alive')
+        self.set_header('Transfer-Encoding', 'chunked')
+        self.write('<html><body>%s' % (x * 244))
+        self.open(*args, **kwargs)
 
+    @tornado.web.asynchronous
+    def post(self, *args, **kwargs):
+        self.set_header('Content-Type', 'text/plain')
+        data = self.get_argument('data')
+        self.async_callback(self._on_message)(
+                data.decode("utf-8", "replace"))
+        self.write('ok')
+        self.finish()
+
+
+    @tornado.web.asynchronous
+    def _write(self, message):
+        self.reset_timeout()
+        self.write('<script>parent.s_(%s), document);</script>' % (json.dumps(message, use_decimal=True)))
+        self.flush()
+
+class XHRPollingSocketIOHandler(PollingSocketIOHandler):
     use_queuing = True
 
     config = {
@@ -152,6 +178,4 @@ class JSONPPollingSocketIOHandler(XHRPollingSocketIOHandler):
         self.write(message)
         self.finish()
 
-class HTMLFileSocketIOHandler(PollingSocketIOHandler):
-    pass
 

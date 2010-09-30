@@ -138,7 +138,7 @@ application = tornado.web.Application([
 ])
 
 if __name__ == "__main__":
-    #flash_policy = tornad_io.websocket.flash.FlashPolicyServer()
+    flash_policy = tornad_io.websocket.flash.FlashPolicyServer()
     http_server = tornado.httpserver.HTTPServer(application)
     http_server.listen(8888)
     tornado.ioloop.IOLoop.instance().start()

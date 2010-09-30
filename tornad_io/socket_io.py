@@ -12,8 +12,6 @@ import tornado.escape
 import tornado.web
 import tornado.httpserver
 
-from tornad_io import util
-
 from tornado import ioloop
 
 # Uses Beaker for session management which enables persistence, etc.
@@ -112,7 +110,8 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         else:
             self.session['output_handle'] = fh
             self.session.save()
-            self._pop_queue() # pop a message off ye' ol' stack
+            if self.use_queuing:
+                self._pop_queue() # pop a message off ye' ol' stack
 
 
     def _pop_queue(self):
@@ -120,7 +119,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         and tries sending it."""
         if self.use_queuing:
             if not self.message_queue.empty():
-                self.debug("Current queue: %d" % self.message_queue.qsize())
+                self.debug("Current queue size: %d" % self.message_queue.qsize())
                 if not self.output_handle._finished:
                     try:
                         msg = self.message_queue.get(timeout=self.config['duration'])
@@ -165,8 +164,8 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         # TODO Logging full info on connection?
         # TODO Timeout data, etc
         if self.config['timeout']:
-            self._timeout = util.PeriodicCallback(self._heartbeat, self.config['timeout'])
-            self._timeout.start()
+            self._heartbeat_timeout = ioloop.PeriodicCallback(self._heartbeat, self.config['timeout'])
+            self._heartbeat_timeout.start()
 
         self.async_callback(self.on_open)(*args, **kwargs)
 
@@ -174,21 +173,22 @@ class SocketIOProtocol(tornado.web.RequestHandler):
     def _heartbeat(self):
         # TODO - Check we *RECEIVE* heartbeats
         try:
-            self._heartbeats += 1
-            self.send('~h~%d' % self._heartbeats)
+            if not self._finished and self.stream._check_closed:
+                self._heartbeats += 1
+                self.send('~h~%d' % self._heartbeats)
+            else:
+                raise Exception, "Connection closed."
         except Exception as e:
-            self.debug("Connection no longer active.  Shutting down heartbeat scheduler.")
-            self._timeout.stop()
             self._abort()
 
     def on_heartbeat(self, beat):
         if beat == self._heartbeats:
             #self.debug("[%s] Received a heartbeat... " % beat)
-            self.reset_timeout()
+            self.reset_heartbeat_timeout()
         else:
             self.warning("Mismatch on heartbeat count.  Timeout may occur. Got %d but expected %d" % (beat, self._heartbeats)) # This logging method may race
 
-    def reset_timeout(self):
+    def reset_heartbeat_timeout(self):
         pass
 
     def verify_origin(self):
@@ -219,9 +219,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
             for m in message:
                 out_fh.send(m)
         else:
-            self.debug("SKIP? %s QUEUE? %s" % (skip_queue, self.use_queuing))
             if not skip_queue and self.use_queuing:
-                self.debug("Queuing mode enabled...")
                 self.message_queue.put(message)
                 # We always queue even if it's the only message we'll send.
                 self._pop_queue()
@@ -322,4 +320,6 @@ class SocketIOProtocol(tornado.web.RequestHandler):
 
     def on_close(self):
         """Invoked when the protocol socket is closed."""
+        self.debug("Shutting down heartbeat schedule; connection closed.")
+        self._heartbeat_timeout.stop()
         self.handler.on_close()

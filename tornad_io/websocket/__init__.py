@@ -19,7 +19,6 @@ class WebSocketIOHandler(tornad_io.socket_io.SocketIOProtocol,
 
     def _on_end_delimiter(self, frame):
         """ Override the default on_message handler to decode first """
-        logging.debug("Got an end delimiter: %s" % frame.decode('utf8', 'replace'))
         if not self.client_terminated:
             self.async_callback(self._on_message)(
                     frame[:-1].decode("utf-8", "replace"))
@@ -27,10 +26,9 @@ class WebSocketIOHandler(tornad_io.socket_io.SocketIOProtocol,
 
     def on_open(self, *args, **kwargs):
         """Invoked when a protocol socket is opened."""
-        logging.debug("[wsio] Opened Socket: args - %s, kwargs - %s" % (args, kwargs))
 
     def _abort(self):
-        logging.debug("Aborting WebSocketIOHandler.")
+        logging.warning("Aborting WebSocketIOHandler.")
         self.client_terminated = True
         self.stream.close()
 
@@ -41,6 +39,5 @@ class WebSocketIOHandler(tornad_io.socket_io.SocketIOProtocol,
         if isinstance(message, unicode):
             message = message.encode("utf-8")
         assert isinstance(message, str)
-        logging.debug("Writing WebSocket Message: %s" % (message))
         self.stream.write("\x00" + message + "\xff")
 
