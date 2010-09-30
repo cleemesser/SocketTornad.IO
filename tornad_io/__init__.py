@@ -46,7 +46,7 @@ class SocketIOHandler(tornado.web.RequestHandler):
             proto_type = kwargs['protocol']
             proto_init = kwargs['protocol_init']
             session_id = kwargs['session_id']
-            logging.debug("Initializing %s(%s) Session ID: %s... Extra Data: %s [PATH: %s XHR PATH: %s]" % (proto_type, proto_init, session_id, extra, kwargs['resource'], kwargs.get('xhr_path', None)))
+            logging.debug("Initializing %s(%s) Session ID: %s... Extra Data: %s [PATH: %s XHR PATH: %s JSONP Index: %s]" % (proto_type, proto_init, session_id, extra, kwargs['resource'], kwargs.get('xhr_path', None), kwargs.get("jsonp_index", None)))
             protocol = PROTOCOLS.get(proto_type, None)
             if protocol and issubclass(protocol, tornad_io.socket_io.SocketIOProtocol):
                 self.protocol = protocol(self)
@@ -123,7 +123,7 @@ class SocketIOHandler(tornado.web.RequestHandler):
             extraRE = "(?P<extra>)"
 
         protoRE = "(%s)" % "|".join(PROTOCOLS.keys())
-        route = (r"/(?P<resource>%s)%s/(?P<protocol>%s)/?(?P<session_id>[0-9a-zA-Z]*?)/?((?P<protocol_init>\d*?)|(?P<xhr_path>\w*?))/?" % (resource, extraRE, protoRE), cls)
+        route = (r"/(?P<resource>%s)%s/(?P<protocol>%s)/?(?P<session_id>[0-9a-zA-Z]*?)/?((?P<protocol_init>\d*?)|(?P<xhr_path>\w*?))/?(?P<jsonp_index>\d*?)" % (resource, extraRE, protoRE), cls)
         return route
 
 

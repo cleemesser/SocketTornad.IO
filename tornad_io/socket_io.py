@@ -6,6 +6,7 @@ import functools
 # have builtin decimal support and are preferred IMHO
 import simplejson as json
 from decimal import Decimal
+from Queue import Queue
 
 import tornado.escape
 import tornado.web
@@ -45,6 +46,14 @@ class SocketIOProtocol(tornado.web.RequestHandler):
     # or a set of asynch messages. Controls output handling.
     # Websockets == False, Polling = True
     asynchronous = True
+    # Use queuing system.
+    # Certain protocols like XHRPolling & JSONPPolling
+    # Don't leave a connection open - they "GET" a single message
+    # And then connect again for another
+    # There is a possible race if we assume they're there - 
+    # Turning queuing on will queue messages on the session
+    # and pop them on each poll.
+    use_queuing = False
     connected = False
     handshaked = False
     session = {'id': None}
@@ -87,6 +96,45 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         self.application = self.handler.application
         self.request = self.handler.request
 
+    @property
+    def message_queue(self):
+        return self.session.get("message_queue", Queue())
+
+    @property
+    def output_handle(self):
+        return self.session.get("output_handle", None)
+
+    @output_handle.setter
+    def output_handle(self, fh):
+        self.debug("Setting new output handle (%s)" % fh)
+        if not getattr(self.session, 'id', None):
+            self.warning("No session setup yet. Ignoring FH Set.")
+        else:
+            self.session['output_handle'] = fh
+            self.session.save()
+            self._pop_queue() # pop a message off ye' ol' stack
+
+
+    def _pop_queue(self):
+        """ Pops a single message off the queue if the FH is open
+        and tries sending it."""
+        if self.use_queuing:
+            if not self.message_queue.empty():
+                self.debug("Current queue: %d" % self.message_queue.qsize())
+                if not self.output_handle._finished:
+                    try:
+                        msg = self.message_queue.get(timeout=self.config['duration'])
+                        self.output_handle.send(msg, skip_queue=True)
+                    except Exception as e:
+                        self.warning("Exception while popping queue (%s) - returning message (%s) to queue." % (e, msg))
+                        if msg:
+                            self.message_queue.put(msg)
+            else:
+                self.info("Message queue empty.  NOOP.")
+
+        else:
+            self.warning("Pop queue invoked in a non-queuing protocol.  NOOP.")
+
 
     def open(self, *args, **kwargs):
         """Internal method for setting up session
@@ -101,14 +149,13 @@ class SocketIOProtocol(tornado.web.RequestHandler):
 
         self.connected = True
 
-
-
         if not self.handshaked:
             self.session = beaker.session.Session(kwargs)
+            self.session['message_queue'] = Queue()
             payload.append(self.session.id)
             self.handshaked = True
 
-        self.session['output_handle'] = self
+        self.output_handle = self
         self.session.save()
 
         payload.extend(self._write_queue)
@@ -145,6 +192,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         pass
 
     def verify_origin(self):
+        """Header check, enforces CORS *IF* they sent an origin header"""
         origin = self.request.headers.get("Origin", None)
         if origin:
             self.debug("Verify Origin: %s" % origin)
@@ -154,27 +202,32 @@ class SocketIOProtocol(tornado.web.RequestHandler):
             port = url.port
             return filter(lambda t: (t[0] == '*' or t[0].lower() == host.lower()) and (t[1] == '*' or  t[1] == int(port)), origins)
         else:
-            self.warning("No Origin.  Verification Fails.")
-            return False
+            return True
 
-    def send(self, message):
+    def send(self, message, skip_queue=False):
         """Message to send data to the client.
         Encodes in Socket.IO protocol and
         ensures it doesn't send if session
         isn't fully open yet."""
 
         if self.asynchronous:
-            out_fh = self.session['output_handle']
+            out_fh = self.output_handle
         else:
             out_fh = self
-
 
         if isinstance(message, list):
             for m in message:
                 out_fh.send(m)
         else:
-            self.async_callback(out_fh._write)(
-                                self._encode(message))
+            self.debug("SKIP? %s QUEUE? %s" % (skip_queue, self.use_queuing))
+            if not skip_queue and self.use_queuing:
+                self.debug("Queuing mode enabled...")
+                self.message_queue.put(message)
+                # We always queue even if it's the only message we'll send.
+                self._pop_queue()
+            else:
+                self.async_callback(out_fh._write)(
+                                    self._encode(message))
 
 
     def _encode(self, message):
