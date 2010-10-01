@@ -6,7 +6,10 @@ import tornado.web
 import tornado.ioloop
 import tornad_io
 from tornad_io.socket_io import SocketIOProtocol
-import simplejson as json
+try:
+    import simplejson as json
+except:
+    import json
 from decimal import Decimal
 
 class PollingSocketIOHandler(SocketIOProtocol):

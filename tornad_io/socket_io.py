@@ -4,7 +4,10 @@ import urlparse
 import functools
 # Newer versions of SimpleJSON from what's in Py 2.6 etc 
 # have builtin decimal support and are preferred IMHO
-import simplejson as json
+try:
+    import simplejson as json
+except:
+    import json
 from decimal import Decimal
 from Queue import Queue
 
