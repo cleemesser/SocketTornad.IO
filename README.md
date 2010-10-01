@@ -18,7 +18,7 @@ You can send messages to the client by use of the `self.send` method.  This take
 For those of you who know Tornado already, do *not* call the `self.write` method unless you want things to act weird.  `self.write` still (in the current iteration) sends raw data to the client - but Socket.IO uses a wire format which requires certain encoding.  Anything you pass via `self.write` will likely not be understood by the client.
 
 
-This is an example client:
+This is an example handler:
 
 
     class EchoHandler(SocketIOHandler):
@@ -33,7 +33,7 @@ This is an example client:
         def on_close(self):
             logging.info("Closing Socket.IO Client for protocol '%s'" % (self.protocol))
 
-This client is meant to be simple: It merely echoes back any message it receives to the client.  Were you to test this in your browser your console will reflect back what you send:
+This handler is meant to be simple: It merely echoes back any message it receives to the client.  Were you to test this in your browser your console will reflect back what you send:
 
     > socket.send("OMG! Ponies!")
     [echo] OMG! Ponies!
