@@ -16,7 +16,7 @@ setup(
     url='http://pypi.python.org/pypi/SocketTornad.IO/',
     license='LICENSE',
     description='Python implementation of the Socket.IO protocol for the Tornado webserver/framework.',
-    long_description=open('README').read(),
+    long_description=open('README.md').read(),
     install_requires=[
         'pyCLI >= 1.1.1',
         'simplejson >= 2.1.0', # Decimal support
