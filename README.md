@@ -1,7 +1,7 @@
 # SocketTornad.IO
 ## Brendan W. McAdams <bmcadams@novus.com>
 ### Contributors
-#### [Matt Swanson](http://github.com/swanson) 
+#### [Matt Swanson][swanson]
 
 Implementation of the [Socket.IO][socket_io] Websocket emulation protocol in Python on top of the non-blocking [Tornado Web Framework][tornado].  Socket.IO is a JavaScript library for providing full emulation of Websockets for browsers which don't support it.  While the client-side programmer codes as if they have a constantly open bi-directional communication channel, Socket.IO will \(if the browser doesn't support Websockets\) use several fallback protocols to provide the behavior.  These fallback protocols require a negotiation between the client and server to determine an agreeable protocol; the [reference implementation][socket_io_node] of the server is done in Node.JS which was less than agreeable to our needs.  There are also implementations in Ruby Rack and Go but we rejected those for simlar reasons to Node.JS.
 
@@ -17,7 +17,7 @@ As a user your only major requirement is to subclass `tornad_io.socket_io.Socket
 
 You can send messages to the client by use of the `self.send` method.  This takes a single argument of `message` and transmits it to the client.  If you pass a string it will be pased "as is" to the browser; if you want to send JSON you should pass a `dict` in, which will be JSON encoded and marked as JSON in the Socket.IO wire format.  An Object is also acceptable as long as *simplejson* is able to encode it to JSON.  
 
-There *is* fallback code for the JSON import - if you don't have `simplejson` installed it will import the `json` module (based on `simplejson`) which has been included with Python since 2.6 instead (thanks to [swanson](http://github.com/swanson) for the patch).  However, the version of `json` which ships with Python lacks built in support for encoding `decimal.Decimal` objects, which is why we prefer (as specified in `setup.py`) `simplejson >= 2.1`.  If you do not have an appropriate version of `simplejson` installed and try to send an object or `dict` containing `decimal.Decimal` instances to the client, you may encounter errors.
+There *is* fallback code for the JSON import - if you don't have `simplejson` installed it will import the `json` module (based on `simplejson`) which has been included with Python since 2.6 instead (thanks to [swanson] for the patch).  However, the version of `json` which ships with Python lacks built in support for encoding `decimal.Decimal` objects, which is why we prefer (as specified in `setup.py`) `simplejson >= 2.1`.  If you do not have an appropriate version of `simplejson` installed and try to send an object or `dict` containing `decimal.Decimal` instances to the client, you may encounter errors.
 
 For those of you who know Tornado already, do *not* call the `self.write` method unless you want things to act weird.  `self.write` still (in the current iteration) sends raw data to the client - but Socket.IO uses a wire format which requires certain encoding.  Anything you pass via `self.write` will likely not be understood by the client.
 
@@ -128,10 +128,13 @@ If you'd like more control over how you start everything up you can start things
         http_server.listen(8888)
         tornado.ioloop.IOLoop.instance().start()
         
+# Examples
+## Chatroom Example
+There is a chatroom example application contributed by [swanson].  It is in the `examples/chatroom` directory.  For instructions, please see its [README](http://github.com/novus/SocketTornad.IO/blob/master/examples/chatroom/README.md).
 
 
 [socket_io]: http://socket.io "Socket.IO"
 [socket_io_node]: http://github.com/learnboost/socket.io-node "Socket.IO Node Server"
 [tornado]: http://www.tornadoweb.org/ "Tornado"
 [tornado_docs]: http://www.tornadoweb.org/documentation "Tornado Docs"
-
+[swanson]: http://github.com/swanson  "Matt Swanson"
