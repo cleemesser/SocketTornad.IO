@@ -1,6 +1,7 @@
 SocketTornad.IO
 ===============
-
+Release 0.1.2
+^^^^^^^^^^^^^
 Brendan W. McAdams bmcadams@novus.com
 -------------------------------------
 
