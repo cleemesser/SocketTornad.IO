@@ -8,7 +8,7 @@ except ImportError:
 
 setup(
     name='SocketTornad.IO',
-    version='0.1.1',
+    version='0.1.2',
     author='Brendan W. McAdams',
     author_email='bmcadams@novus.com',
     packages=['tornad_io', 'tornad_io.websocket'],
@@ -16,7 +16,7 @@ setup(
     url='http://github.com/novus/SocketTornad.IO',
     license='LICENSE',
     description='Python implementation of the Socket.IO protocol for the Tornado webserver/framework.',
-    long_description=open('README.rst').read(),
+    #long_description=open('README.rst').read(),
     install_requires=[
         'pyCLI >= 1.1.1',
         'simplejson >= 2.1.0', # Decimal support
