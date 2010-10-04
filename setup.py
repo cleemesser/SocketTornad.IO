@@ -13,7 +13,7 @@ setup(
     author_email='bmcadams@novus.com',
     packages=['tornad_io', 'tornad_io.websocket'],
     scripts=[],
-    url='http://pypi.python.org/pypi/SocketTornad.IO/',
+    url='http://github.com/novus/SocketTornad.IO',
     license='LICENSE',
     description='Python implementation of the Socket.IO protocol for the Tornado webserver/framework.',
     long_description=open('README.md').read(),
