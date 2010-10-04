@@ -11,7 +11,7 @@ setup(
     version='0.1.0',
     author='Brendan W. McAdams',
     author_email='bmcadams@novus.com',
-    packages=['tornad_io'],
+    packages=['tornad_io', 'tornad_io.websocket'],
     scripts=[],
     url='http://pypi.python.org/pypi/SocketTornad.IO/',
     license='LICENSE',
