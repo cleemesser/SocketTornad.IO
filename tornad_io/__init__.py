@@ -128,18 +128,18 @@ class SocketIOHandler(tornado.web.RequestHandler):
         #return (r"/%s/((xhr-polling|xhr-multipart|jsonp-polling|htmlfile)/)?/?/(\d*)/(%s)" % (resource, extraRE), cls)
         if extraRE:
             if extraRE[0] != '(?P<extra>':
-                if extraRE[0] == '(':
-                    extraRE = r'(?P<extra>%s)' % extraRE
-                else:
-                    extraRE = r"(?P<extra>%s)" % extraRE
+                extraRE = r'(?P<extra>%s)' % extraRE
             if extraSep:
                 extraRE = extraSep + extraRE
         else:
             extraRE = "(?P<extra>)"
 
         protoRE = "(%s)" % "|".join(PROTOCOLS.keys())
-        route = (r"/(?P<resource>%s)%s/(?P<protocol>%s)/?(?P<session_id>[0-9a-zA-Z]*?)/?((?P<protocol_init>\d*?)|(?P<xhr_path>\w*?))/?(?P<jsonp_index>\d*?)" % (resource, extraRE, protoRE), cls)
-        return route
+        return (
+            r"/(?P<resource>%s)%s/(?P<protocol>%s)/?(?P<session_id>[0-9a-zA-Z]*?)/?((?P<protocol_init>\d*?)|(?P<xhr_path>\w*?))/?(?P<jsonp_index>\d*?)"
+            % (resource, extraRE, protoRE),
+            cls,
+        )
 
 class SocketIOServer(tornado.httpserver.HTTPServer):
     """HTTP Server which does some configuration and automatic setup

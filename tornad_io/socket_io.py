@@ -208,7 +208,12 @@ class SocketIOProtocol(tornado.web.RequestHandler):
             url = urlparse.urlparse(origin)
             host = url.hostname
             port = url.port
-            return filter(lambda t: (t[0] == '*' or t[0].lower() == host.lower()) and (t[1] == '*' or  t[1] == int(port)), origins)
+            return filter(
+                lambda t: ((t[0] == '*' or t[0].lower() == host.lower()))
+                and t[1] in ['*', int(port)],
+                origins,
+            )
+
         else:
             return True
 
@@ -218,11 +223,7 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         ensures it doesn't send if session
         isn't fully open yet."""
 
-        if self.asynchronous:
-            out_fh = self.output_handle
-        else:
-            out_fh = self
-
+        out_fh = self.output_handle if self.asynchronous else self
         if isinstance(message, list):
             for m in message:
                 out_fh.send(m)
@@ -288,7 +289,6 @@ class SocketIOProtocol(tornado.web.RequestHandler):
         """Write method which all protocols must define to
         indicate how to push to their wire"""
         self.warning("[socketio protocol] Default call to _write. NOOP. [%s]" % message)
-        pass
 
 
     def async_callback(self, callback, *args, **kwargs):
